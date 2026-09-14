@@ -4,7 +4,7 @@ import {
   ShaderMaterial, Effect, ParticleSystem, Texture, TransformNode, Animation,
   GlowLayer
 } from '@babylonjs/core';
-import { terrainHeight, terrainColor, mulberry32 } from './utils';
+import { terrainHeight, terrainColor, groundHeight, dugDepth, mulberry32 } from './utils';
 
 export interface WorldRefs {
   shadowGen: ShadowGenerator;
@@ -12,8 +12,16 @@ export interface WorldRefs {
   hemi: HemisphericLight;
   skyMat: ShaderMaterial;
   water: Mesh;
+  ground: Mesh;
+  cloudMat: StandardMaterial;
   colliders: { x: number; z: number; r: number }[];
   setTimeOfDay(t: number): void;
+  /** Recompute heights/colors/normals for terrain verts within radius of (x, z). */
+  refreshTerrainArea(x: number, z: number, radius: number): void;
+  /** Dim/brighten clouds for weather (0 = clear … 1 = storm-dark). */
+  setCloudCover(v: number): void;
+  /** Wind drift for clouds: direction + speed multiplier. */
+  setWind(dx: number, dz: number, speedMul: number): void;
   update(t: number, dt: number): void;
 }
 
@@ -44,7 +52,7 @@ export function buildWorld(scene: Scene, onProgress: (p: number, label: string) 
   sun.autoCalcShadowZBounds = false;
   (sun as any).shadowOrthoScale = 0.6;
 
-  // ---------- Terrain ----------
+  // ---------- Terrain (deformable heightfield — see utils dig/fill) ----------
   onProgress(0.15, 'Sculpting terrain…');
   const SIZE = 400, SUB = 150;
   const ground = new Mesh('ground', scene);
@@ -53,22 +61,41 @@ export function buildWorld(scene: Scene, onProgress: (p: number, label: string) 
   const normals: number[] = [];
   const colors: number[] = [];
   const uvs: number[] = [];
+  const colorRand: number[] = []; // stable per-vertex variation for recoloring dug ground
   const rand = mulberry32(1337);
+
+  const paintVertex = (vi: number, x: number, y: number, z: number) => {
+    const e = 1.2;
+    const dx = groundHeight(x + e, z) - groundHeight(x - e, z);
+    const dz = groundHeight(x, z + e) - groundHeight(x, z - e);
+    const slope = Math.min(1, Math.hypot(dx, dz) / (2 * e) * 0.9);
+    let [r, g, b] = terrainColor(y, slope, colorRand[vi]);
+    const dug = dugDepth(x, z);
+    if (dug > 0.15) {
+      // exposed earth: dirt, deeper = rock
+      const rockMix = Math.min(1, dug / 3);
+      const dr = 0.42 + rockMix * 0.08, dg = 0.3 + rockMix * 0.12, db = 0.2 + rockMix * 0.14;
+      const k = Math.min(1, dug * 1.2);
+      r = r + (dr - r) * k; g = g + (dg - g) * k; b = b + (db - b) * k;
+    }
+    colors[vi * 4] = r; colors[vi * 4 + 1] = g; colors[vi * 4 + 2] = b; colors[vi * 4 + 3] = 1;
+  };
 
   for (let iz = 0; iz <= SUB; iz++) {
     for (let ix = 0; ix <= SUB; ix++) {
       const x = (ix / SUB - 0.5) * SIZE;
       const z = (iz / SUB - 0.5) * SIZE;
-      const y = terrainHeight(x, z);
+      const y = groundHeight(x, z);
       positions.push(x, y, z);
       uvs.push(ix / SUB, iz / SUB);
-      // slope estimate
-      const e = 1.2;
-      const dx = terrainHeight(x + e, z) - terrainHeight(x - e, z);
-      const dz = terrainHeight(x, z + e) - terrainHeight(x, z - e);
-      const slope = Math.min(1, Math.hypot(dx, dz) / (2 * e) * 0.9);
-      const [r, g, b] = terrainColor(y, slope, rand());
-      colors.push(r, g, b, 1);
+      colorRand.push(rand());
+      colors.push(0, 0, 0, 1);
+    }
+  }
+  for (let vi = 0; vi <= SUB; vi++) {
+    for (let vj = 0; vj <= SUB; vj++) {
+      const idx = vi * (SUB + 1) + vj;
+      paintVertex(idx, positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]);
     }
   }
   for (let iz = 0; iz < SUB; iz++) {
@@ -99,6 +126,31 @@ export function buildWorld(scene: Scene, onProgress: (p: number, label: string) 
   ground.freezeWorldMatrix();
   ground.isPickable = true;
   ground.metadata = { isGround: true };
+
+  /** Re-displace + recolor + renormalize terrain verts near (x, z) after dig/fill. */
+  function refreshTerrainArea(x: number, z: number, radius: number): void {
+    const step = SIZE / SUB;
+    const r = radius + step * 2;
+    const minIx = Math.max(0, Math.floor(((x - r) / SIZE + 0.5) * SUB));
+    const maxIx = Math.min(SUB, Math.ceil(((x + r) / SIZE + 0.5) * SUB));
+    const minIz = Math.max(0, Math.floor(((z - r) / SIZE + 0.5) * SUB));
+    const maxIz = Math.min(SUB, Math.ceil(((z + r) / SIZE + 0.5) * SUB));
+    for (let iz = minIz; iz <= maxIz; iz++) {
+      for (let ix = minIx; ix <= maxIx; ix++) {
+        const vi = iz * (SUB + 1) + ix;
+        const vx = (ix / SUB - 0.5) * SIZE;
+        const vz = (iz / SUB - 0.5) * SIZE;
+        const vy = groundHeight(vx, vz);
+        positions[vi * 3 + 1] = vy;
+        paintVertex(vi, vx, vy, vz);
+      }
+    }
+    ground.updateVerticesData('positions', positions);
+    ground.updateVerticesData('colors', colors);
+    VertexData.ComputeNormals(positions, indices, normals);
+    ground.updateVerticesData('normals', normals);
+    ground.refreshBoundingInfo();
+  }
 
   // ---------- Sky dome (gradient + sun glow) ----------
   Effect.ShadersStore['skyVertexShader'] = `
@@ -180,8 +232,19 @@ export function buildWorld(scene: Scene, onProgress: (p: number, label: string) 
   puffMat.emissiveColor = new Color3(0.75, 0.78, 0.82);
   puffMat.alpha = 0.92;
   puffMat.disableLighting = false;
+  puffMat.backFaceCulling = false;
   puff.material = puffMat;
   puff.isPickable = false;
+  // Base cloud brightness (weather darkens via setCloudCover)
+  const cloudBaseEmissive = new Color3(0.75, 0.78, 0.82);
+  const cloudBaseAlpha = 0.92;
+  let windDirX = 1, windDirZ = 0.25, windSpeedMul = 1;
+  function setCloudCover(v: number): void {
+    const k = Math.max(0, Math.min(1, v));
+    puffMat.emissiveColor = cloudBaseEmissive.scale(1 - k * 0.72);
+    puffMat.diffuseColor = new Color3(1 - k * 0.45, 1 - k * 0.42, 1 - k * 0.35);
+    puffMat.alpha = Math.min(1, cloudBaseAlpha + k * 0.08);
+  }
   const cloudRand = mulberry32(99);
   const clouds: { node: TransformNode; speed: number }[] = [];
   for (let i = 0; i < 9; i++) {
@@ -246,11 +309,22 @@ export function buildWorld(scene: Scene, onProgress: (p: number, label: string) 
     water.position.y = pondY + Math.sin(t * 1.2) * 0.08;
     foam.scaling.setAll(1 + Math.sin(t * 0.8) * 0.008);
     for (const c of clouds) {
-      c.node.position.x += c.speed * dt;
+      c.node.position.x += c.speed * windSpeedMul * windDirX * dt;
+      c.node.position.z += c.speed * windSpeedMul * windDirZ * dt * 0.5;
       if (c.node.position.x > 280) c.node.position.x = -280;
+      if (c.node.position.x < -280) c.node.position.x = 280;
+      if (c.node.position.z > 280) c.node.position.z = -280;
+      if (c.node.position.z < -280) c.node.position.z = 280;
     }
     ps.emitter = (scene.activeCamera?.position ?? Vector3.Zero()).add(new Vector3(0, 2, 0));
   }
 
-  return { shadowGen, sun, hemi, skyMat, water, colliders: [], setTimeOfDay, update };
+  /** Wind drift for clouds (set by the weather simulation). */
+  function setWind(dx: number, dz: number, speedMul: number): void {
+    const l = Math.hypot(dx, dz) || 1;
+    windDirX = dx / l; windDirZ = dz / l;
+    windSpeedMul = speedMul;
+  }
+
+  return { shadowGen, sun, hemi, skyMat, water, ground, cloudMat: puffMat, colliders: [], setTimeOfDay, refreshTerrainArea, setCloudCover, setWind, update };
 }
