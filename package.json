@@ -1,0 +1,22 @@
+{
+  "name": "babylon-openworld",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "vite preview --port 3000 --strictPort --host",
+    "serve": "vite preview --port 3000 --strictPort --host",
+    "test:world": "tsx headless-test.ts"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.31.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0"
+  }
+}
