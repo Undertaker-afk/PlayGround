@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#87ceeb" />
+    <title>Babylon Open World — Grasslands</title>
+    <script type="module" crossorigin src="/assets/index-CLATFYJ9.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DR-DP2kk.css">
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="loading">
+      <div class="loader-card">
+        <h1>🌿 Grasslands</h1>
+        <p>Generating open world…</p>
+        <div class="bar"><div id="load-fill"></div></div>
+        <small id="load-status">terrain…</small>
+      </div>
+    </div>
+
+    <div id="hud" class="hidden">
+      <div id="hud-top">
+        <div class="pill" id="stat-fps">60 fps</div>
+        <div class="pill" id="stat-pos">0, 0</div>
+        <div class="pill gold" id="stat-coins">✦ 0 / 24</div>
+        <div class="pill" id="stat-time">☀ Day</div>
+      </div>
+      <div id="hud-help">
+        <span class="kbd">WASD</span> move · <span class="kbd">Space</span> jump · <span class="kbd">Shift</span> sprint · drag to look
+      </div>
+      <div id="hud-buttons">
+        <button id="btn-quality" title="Toggle quality">⚙ Auto</button>
+        <button id="btn-daynight" title="Toggle day/night">🌙</button>
+        <button id="btn-help" title="Help">?</button>
+      </div>
+      <canvas id="minimap" width="140" height="140"></canvas>
+    </div>
+
+    <div id="touch-ui" class="hidden">
+      <div id="joystick"><div id="stick"></div></div>
+      <div id="touch-right">
+        <button id="btn-jump" class="touch-btn">▲</button>
+        <button id="btn-sprint" class="touch-btn small">≫</button>
+      </div>
+    </div>
+
+    <div id="help-modal" class="hidden">
+      <div class="modal-card">
+        <h2>How to play</h2>
+        <ul>
+          <li><b>Desktop:</b> WASD / arrows to move, mouse-drag to orbit, wheel to zoom, Space to jump, Shift to sprint.</li>
+          <li><b>Mobile:</b> left joystick to move, drag right half of screen to look, ▲ to jump, ≫ to sprint.</li>
+          <li>Collect all <b>✦ shards</b> scattered in the meadow. Walk into glowing rings, ponds and groves to find them.</li>
+          <li>Grass, pines, oaks, bushes, rocks, flowers, reeds & mushrooms are all procedurally modeled — no downloads.</li>
+        </ul>
+        <button id="btn-close-help">Start exploring</button>
+      </div>
+    </div>
+
+    <div id="toast" class="hidden"></div>
+  </body>
+</html>
