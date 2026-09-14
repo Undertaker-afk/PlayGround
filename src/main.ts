@@ -3,6 +3,9 @@ import './style.css';
 import { buildWorld } from './world';
 import { buildVegetation } from './vegetation';
 import { buildPlayer } from './player';
+import { buildInventory } from './inventory';
+import { buildWeather, weatherLabel } from './weather';
+import { buildMining } from './mining';
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 const loadFill = document.getElementById('load-fill')!;
@@ -36,10 +39,14 @@ async function boot() {
   const world = buildWorld(scene, setProgress);
   const veg = buildVegetation(scene, world.colliders, world.shadowGen, setProgress);
   const player = buildPlayer(scene, world.colliders, world.shadowGen);
+  const inv = buildInventory();
+  const weather = buildWeather(scene, world, veg, (m) => inv.toast(m));
+  const mining = buildMining(scene, world, veg, inv);
 
   // ---------- UI wiring ----------
   const qualityBtn = document.getElementById('btn-quality')!;
   const timeBtn = document.getElementById('btn-time')!;
+  const weatherBtn = document.getElementById('btn-weather')!;
   const camBtn = document.getElementById('btn-cam')!;
   const qualities = ['Auto', 'High', 'Low'] as const;
   let qi = 0;
@@ -58,7 +65,12 @@ async function boot() {
   timeBtn.addEventListener('click', () => {
     tod = (tod + 0.18) % 1;
     world.setTimeOfDay(tod);
+    weather.setTimeOfDay(tod);
     timeBtn.textContent = todLabel();
+  });
+  weatherBtn.textContent = weatherLabel(weather.type);
+  weatherBtn.addEventListener('click', () => {
+    weatherBtn.textContent = weatherLabel(weather.cycle());
   });
   camBtn.addEventListener('click', () => {
     player.setThirdPerson(!player.isThirdPerson());
@@ -89,6 +101,8 @@ async function boot() {
     player.update(dt);
     world.update(elapsed, dt);
     veg.update(elapsed);
+    weather.update(dt, player.camera.position);
+    mining.update(dt);
 
     // auto quality: drop pixel ratio if fps tanks
     fpsAcc += 1 / Math.max(dt, 1e-4); fpsN++; fpsT += dt;
