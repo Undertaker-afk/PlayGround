@@ -2,7 +2,7 @@ import {
   Scene, Vector3, MeshBuilder, StandardMaterial, Color3,
   UniversalCamera, Mesh, Quaternion
 } from '@babylonjs/core';
-import { terrainHeight } from './utils';
+import { groundHeight } from './utils';
 
 export interface InputState {
   fwd: number; strafe: number; sprint: boolean; jump: boolean;
@@ -55,7 +55,7 @@ export function buildPlayer(scene: Scene, colliders: { x: number; z: number; r: 
   let dist = 8;
   let thirdPerson = true;
 
-  const pos = new Vector3(0, terrainHeight(0, 0), 0);
+  const pos = new Vector3(0, groundHeight(0, 0), 0);
   let vy = 0;
   let grounded = true;
   let faceAngle = 0;
@@ -188,7 +188,7 @@ export function buildPlayer(scene: Scene, colliders: { x: number; z: number; r: 
       }
     }
 
-    const groundY = terrainHeight(pos.x, pos.z);
+    const groundY = groundHeight(pos.x, pos.z);
     if (input.jump && grounded) { vy = 7.5; grounded = false; }
     vy -= 22 * dt;
     pos.y += vy * dt;
@@ -214,7 +214,7 @@ export function buildPlayer(scene: Scene, colliders: { x: number; z: number; r: 
     const cx = pos.x + Math.sin(yaw) * Math.cos(pitch) * dist;
     const cz = pos.z + Math.cos(yaw) * Math.cos(pitch) * dist;
     let cy = pos.y + 1.8 + Math.sin(pitch) * dist;
-    cy = Math.max(cy, terrainHeight(cx, cz) + 0.6);
+    cy = Math.max(cy, groundHeight(cx, cz) + 0.6);
     if (thirdPerson) {
       camera.position.set(cx, cy, cz);
       camera.setTarget(new Vector3(pos.x, pos.y + 1.6, pos.z));

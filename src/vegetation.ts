@@ -3,21 +3,32 @@ import {
   MeshBuilder, Quaternion, Matrix, InstancedMesh, VertexBuffer
 } from '@babylonjs/core';
 import { CustomMaterial } from '@babylonjs/materials';
-import { terrainHeight, mulberry32 } from './utils';
+import { groundHeight, mulberry32 } from './utils';
 
 export function setWindTime(mat: CustomMaterial, t: number) {
   (mat as any)._newUniformInstances = (mat as any)._newUniformInstances || {};
   (mat as any)._newUniformInstances['float-time'] = t;
 }
 
+export function setWindStrength(mat: CustomMaterial, s: number) {
+  (mat as any)._newUniformInstances = (mat as any)._newUniformInstances || {};
+  (mat as any)._newUniformInstances['float-windStrength'] = s;
+}
+
 export interface VegRefs {
   update(t: number): void;
   setDensity(factor: number): void;
+  /** Global wind multiplier driven by the weather simulation (0.3 calm … 2.5 storm). */
+  setWind(s: number): void;
+  /** Chop the nearest living tree within radius of (x, z). Returns wood gained + whether it fell. */
+  chopTreeAt(x: number, z: number, radius: number): { wood: number; felled: boolean };
 }
 
 function windify(mat: CustomMaterial, strength = 0.14, freq = 2.2) {
   mat.AddUniform('time', 'float', 0.001);
+  mat.AddUniform('windStrength', 'float', 0.001);
   (mat as any)._newUniformInstances['float-time'] = 0;
+  (mat as any)._newUniformInstances['float-windStrength'] = 1;
   mat.Vertex_Definitions('varying float vWindH;\n');
   mat.Fragment_Definitions('varying float vWindH;\n');
   // NOTE: injected at CUSTOM_VERTEX_UPDATE_POSITION where the mutable var is "positionUpdated"
@@ -29,8 +40,8 @@ function windify(mat: CustomMaterial, strength = 0.14, freq = 2.2) {
       float phW = 0.0;
     #endif
     float hW = clamp(position.y * 1.2, 0.0, 1.5);
-    positionUpdated.x += sin(time*${freq} + phW) * ${strength} * hW;
-    positionUpdated.z += cos(time*${(freq * 0.77).toFixed(2)} + phW*1.3) * ${(strength * 0.7).toFixed(3)} * hW;
+    positionUpdated.x += sin(time*${freq} + phW) * ${(strength).toFixed(3)} * windStrength * hW;
+    positionUpdated.z += cos(time*${(freq * 0.77).toFixed(2)} + phW*1.3) * ${(strength * 0.7).toFixed(3)} * windStrength * hW;
     vWindH = hW;
   `);
   return mat;
@@ -97,10 +108,10 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
     if (Math.abs(x) > 165 || Math.abs(z) > 165) return false;
     if (Math.hypot(x, z) < 4) return false; // spawn clearing
     if (Math.hypot(x - 40, z + 35) < 27) return false; // pond
-    const y = terrainHeight(x, z);
+    const y = groundHeight(x, z);
     if (y > 17 || y < -2.5) return false;
     const e = 1.5;
-    const slope = Math.hypot(terrainHeight(x + e, z) - terrainHeight(x - e, z), terrainHeight(x, z + e) - terrainHeight(x, z - e)) / (2 * e);
+    const slope = Math.hypot(groundHeight(x + e, z) - groundHeight(x - e, z), groundHeight(x, z + e) - groundHeight(x, z - e)) / (2 * e);
     if (slope > 0.75) return false;
     return true;
   };
@@ -108,7 +119,7 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
     for (let i = 0; i < 24; i++) {
       const x = (rng() - 0.5) * 330;
       const z = (rng() - 0.5) * 330;
-      if (validSpot(x, z)) return [x, terrainHeight(x, z), z];
+      if (validSpot(x, z)) return [x, groundHeight(x, z), z];
     }
     return null;
   };
@@ -210,6 +221,8 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
   const oakCrown2 = MeshBuilder.CreateIcoSphere('oakCrown2', { radius: 1.6, subdivisions: 1, flat: true }, scene);
   oakCrown2.position.y = 5.6; oakCrown2.material = leafMat; oakCrown2.setEnabled(false);
 
+  interface TreeRecord { x: number; z: number; parts: InstancedMesh[]; hp: number; alive: boolean; colliderIdx: number; }
+  const trees: TreeRecord[] = [];
   const TREE_COUNT = isMobile ? 90 : 150;
   for (let i = 0; i < TREE_COUNT; i++) {
     const s = pickSpot();
@@ -217,6 +230,7 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
     const isPine = rng() > 0.45;
     const sc = 0.8 + rng() * 1.3;
     const rot = rng() * Math.PI * 2;
+    const parts: InstancedMesh[] = [];
     const add = (base: Mesh, dy: number, sMul = 1) => {
       const inst = base.createInstance(`${base.name}_i${i}`) as InstancedMesh;
       inst.position = new Vector3(s[0], s[1] + dy * sc, s[2]);
@@ -225,13 +239,45 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
       inst.isPickable = false;
       try { shadowGen.addShadowCaster(inst); } catch { /* noop */ }
       allInstances.push(inst);
+      parts.push(inst);
     };
     if (isPine) {
       add(pineTrunk, 1.6); add(pineF1, 3.4); add(pineF2, 4.8); add(pineF3, 6.0);
     } else {
       add(oakTrunk, 1.3); add(oakCrown, 4.1); add(oakCrown2, 5.6);
     }
-    if (sc > 0.9) colliders.push({ x: s[0], z: s[2], r: 0.9 * sc });
+    let colliderIdx = -1;
+    if (sc > 0.9) {
+      colliderIdx = colliders.length;
+      colliders.push({ x: s[0], z: s[2], r: 0.9 * sc });
+    }
+    trees.push({ x: s[0], z: s[2], parts, hp: 4, alive: true, colliderIdx });
+  }
+
+  /** Chop nearest living tree: +1 wood per hit, +3 bonus + fell at 0 hp. */
+  function chopTreeAt(x: number, z: number, radius: number): { wood: number; felled: boolean } {
+    let best: TreeRecord | null = null;
+    let bestD = radius;
+    for (const t of trees) {
+      if (!t.alive) continue;
+      const d = Math.hypot(t.x - x, t.z - z);
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    if (!best) return { wood: 0, felled: false };
+    best.hp -= 1;
+    // hit feedback: quick squash
+    for (const p of best.parts) p.scaling.scaleInPlace(0.96);
+    if (best.hp <= 0) {
+      best.alive = false;
+      for (const p of best.parts) p.setEnabled(false);
+      if (best.colliderIdx >= 0 && colliders[best.colliderIdx]) {
+        colliders.splice(best.colliderIdx, 1);
+        // fix up later indices
+        for (const t of trees) if (t.colliderIdx > best.colliderIdx) t.colliderIdx -= 1;
+      }
+      return { wood: 4, felled: true };
+    }
+    return { wood: 1, felled: false };
   }
 
   // ================= BUSHES =================
@@ -381,6 +427,9 @@ export function buildVegetation(scene: Scene, colliders: { x: number; z: number;
       dummyGrass[n].setEnabled(hash < factor || n % 5 === 0);
     }
   }
+  function setWind(s: number) {
+    for (const m of windMats) setWindStrength(m, s);
+  }
 
-  return { update, setDensity };
+  return { update, setDensity, setWind, chopTreeAt };
 }
