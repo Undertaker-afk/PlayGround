@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#87ceeb" />
+    <link rel="icon" href="data:," />
+    <title>Babylon.js Open World — Grass, Trees & Mobile</title>
+    <script type="module" crossorigin src="/assets/index-C3vtRZIW.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BDwQ014W.css">
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="hud">
+      <div id="title-chip">🌿 OPEN WORLD <span id="fps">60 fps</span></div>
+      <div id="stats">WASD move · Mouse drag look · Space jump</div>
+      <div id="buttons-row">
+        <button id="btn-quality" class="pill">Quality: Auto</button>
+        <button id="btn-time" class="pill">☀ Day</button>
+        <button id="btn-cam" class="pill">🎥 3rd</button>
+      </div>
+    </div>
+
+    <!-- Mobile controls -->
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="mobile-actions">
+      <button id="btn-jump">⤒</button>
+      <button id="btn-sprint">≫</button>
+    </div>
+
+    <div id="loading">
+      <div class="loader-card">
+        <div class="loader-title">🌍 Growing world…</div>
+        <div class="bar"><div id="load-fill"></div></div>
+        <div id="load-text">Creating terrain…</div>
+      </div>
+    </div>
+
+  </body>
+</html>
