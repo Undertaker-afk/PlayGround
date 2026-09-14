@@ -9,20 +9,41 @@
   </head>
   <body>
     <canvas id="game-canvas"></canvas>
+    <div id="crosshair"></div>
+    <div id="flash"></div>
 
     <div id="hud">
       <div id="title-chip">🌿 OPEN WORLD <span id="fps">60 fps</span></div>
-      <div id="stats">WASD move · Mouse drag look · Space jump</div>
+      <div id="stats">WASD move · Click mine · B build · E bag</div>
       <div id="buttons-row">
         <button id="btn-quality" class="pill">Quality: Auto</button>
         <button id="btn-time" class="pill">☀ Day</button>
+        <button id="btn-weather" class="pill">🌤 Clear</button>
         <button id="btn-cam" class="pill">🎥 3rd</button>
+        <button id="mode-btn" class="pill">⛏ Mine</button>
+        <button id="bag-btn" class="pill">🎒 Bag</button>
       </div>
     </div>
+
+    <!-- Hotbar -->
+    <div id="hotbar"></div>
+
+    <!-- Inventory panel -->
+    <div id="inv-panel">
+      <div class="inv-head">
+        <span>🎒 Inventory <small>(E to close)</small></span>
+        <button id="inv-close">✕</button>
+      </div>
+      <div id="inv-grid"></div>
+      <div class="inv-foot">⛏ Click ground to mine · 🧱 Build mode places dirt/stone · 🪓 Click trees to chop · 💎 Find glowing ore veins</div>
+    </div>
+
+    <div id="toasts"></div>
 
     <!-- Mobile controls -->
     <div id="joystick"><div id="stick"></div></div>
     <div id="mobile-actions">
+      <button id="btn-mine">⛏</button>
       <button id="btn-jump">⤒</button>
       <button id="btn-sprint">≫</button>
     </div>
